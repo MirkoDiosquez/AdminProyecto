@@ -1,0 +1,42 @@
+version: "3.8"
+
+# Servicios de persistencia del módulo Admin/Analytics.
+# No reemplaza ni interfiere con RabbitMQ (broker del backend social).
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: analytics_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-anti_procrastinacion}
+      POSTGRES_USER: ${POSTGRES_USER:-analytics_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - analytics_pg_data:/var/lib/postgresql/data
+      - ./postgre.sql:/docker-entrypoint-initdb.d/1_schema.sql
+      - ./indexes.sql:/docker-entrypoint-initdb.d/2_indexes.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-analytics_user}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: analytics_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - analytics_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  analytics_pg_data:
+  analytics_redis_data:

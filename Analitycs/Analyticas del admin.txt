@@ -1,0 +1,15 @@
+cuantos usuarios hay registrados,
+cuantos usuarios activos con la app en esta semana/mes/totales/diarios, (filtro)
+promedio de tiempo en pantalla de los usuarios por rango de edades 10-15/16-20, (filtro)
+promedio de cantidad competencias de todos los usuarios,
+cantidad de competencias totales, 
+5 apps con mas promedio de tiempo en pantalla,
+cantidad promedio de tareas por usuario, cantidad promedio de tareas realizadas por usuario, (todo una consulta con filtro para ver cantidad completadas y no completadas)
+cantidad de usuarios por dispositivos, (Motorola, Samsung, Huaewi, etc)
+usuarios por cantidad de tiempo desde que se registraron (grafico barras), (filtrar por rango de tiempo, ultimo año, ultima semana, etc.)
+promedio de edad de los usuarios,
+promedio de desafios completados por usuario,
+porcentaje de usuarios por genero, (Hombre, Mujer, Rarito)
+porcentaje de usuarios por pais. (filtro por regios, pais, en caso de ser pais aparezca cantidad yt porcentaje con respecto al global).
+
+
