@@ -1,9 +1,9 @@
 
-# Feature Specification: API de Reportes para el Panel de Administración
+# Feature Specification: API de Reportes y Documentación Interactiva para el Panel de Administración
 
 **Rama del Feature**: `001-reportes-fastapi`
 
-**Creado**: 2026-09-07
+**Creado**: 2026-09-07 (fusionado con `002-swagger-docs` el 2026-09-15)
 
 **Estado**: Borrador
 
@@ -13,22 +13,27 @@
 online; el Principio II (offline-first) de la constitución raíz rige exclusivamente para lo
 personal del usuario final y no se hereda a este módulo.
 
-**Modelo de datos**: No se modifica el esquema PostgreSQL. Este feature consume de solo lectura
-el esquema ya definido en `postgre.sql` / `indexes.sql` (`dim_users`, `fact_user_activity`,
-`fact_app_usage`, `fact_challenges`, `fact_tasks`, `fact_user_groups`), poblado nocturnamente por
-un proceso ETL externo a este repo. Ninguna de las tablas `dim_*` / `fact_*` se escribe desde
-este módulo. Además, este feature incorpora una capa de caché de solo lectura (Redis,
-read-through) delante de PostgreSQL para servir los 13 reportes ya agregados; esta caché no
-reemplaza ni modifica el esquema PostgreSQL, y se invalida tras cada corrida del ETL (ver
-FR-022). `indexes.sql` contiene únicamente índices de PostgreSQL, no una tabla de caché.
+**Modelo de datos**: No se modifica el esquema PostgreSQL ni se agregan estructuras de Redis
+nuevas fuera de lo ya descripto. Este feature consume de solo lectura el esquema ya definido en
+`postgre.sql` / `indexes.sql` (`dim_users`, `fact_user_activity`, `fact_app_usage`,
+`fact_challenges`, `fact_tasks`, `fact_user_groups`), poblado nocturnamente por un proceso ETL
+externo a este repo. Ninguna de las tablas `dim_*` / `fact_*` se escribe desde este módulo.
+Además, este feature incorpora una capa de caché de solo lectura (Redis, read-through) delante de
+PostgreSQL para servir los 13 reportes ya agregados; esta caché no reemplaza ni modifica el
+esquema PostgreSQL, y se invalida tras cada corrida del ETL (ver FR-022). `indexes.sql` contiene
+únicamente índices de PostgreSQL, no una tabla de caché. La documentación interactiva (Swagger
+UI/OpenAPI) tampoco modifica ningún esquema; solo agrega metadatos sobre los endpoints ya
+definidos.
 
-**Entrada**: Descripción del usuario: "API de Reportes para el Panel de Administración — 13 reportes de
-solo lectura/agregación sobre PostgreSQL ya poblado por ETL, más autenticación propia de
-administrador para el Panel Admin (React), sin tocar Firestore ni el esquema de datos."
+**Entrada**: Descripción del usuario: "API de Reportes para el Panel de Administración — 13
+reportes de solo lectura/agregación sobre PostgreSQL ya poblado por ETL, más autenticación propia
+de administrador para el Panel Admin (React), sin tocar Firestore ni el esquema de datos." +
+"Quiero que los endpoints se prueben con Swagger; al finalizar cada endpoint me debe dejar
+probarlos con Swagger." (feature `002-swagger-docs`, fusionado aquí).
 
 ## Clarifications
 
-### Session 2026-09-07
+### Sesión 2026-09-07 (API de reportes)
 
 - Q: ¿Cómo se van a almacenar y gestionar las cuentas de administrador que usan el Panel Admin? (FR-020) → A: Un único administrador con credenciales fijas guardadas en variables de entorno (usuario y hash de contraseña).
 - Q: ¿Cuánto tiempo debe durar la sesión/token de administrador antes de expirar automáticamente? → A: La sesión expira a las 00:00 (medianoche) del día en curso, sin importar la hora de login; el admin debe volver a autenticarse cada día.
@@ -43,6 +48,13 @@ administrador para el Panel Admin (React), sin tocar Firestore ni el esquema de 
 - Q: El código ya implementado (`analytics_router.py`) no valida rangos de edad inválidos en `/screen-time/age-range` (ejecuta la consulta tal cual) y responde 200 con `{"error": ...}` en el cuerpo cuando falta `period_key` en `/users/active`, en vez de 422, contradiciendo FR-019 y el edge case de validación de rango de edad. ¿Cuál prevalece? → A: Prevalece la especificación (422 con mensaje descriptivo ante filtros inválidos); el código ya implementado queda marcado como una discrepancia conocida a corregir durante `/plan`/`/implement` (agregar validación explícita de `min_age <= max_age`, valores no negativos, y `period_key` requerido/válido, respondiendo 422 en vez de 200), no se revierte la spec.
 - Q: La spec nunca especifica los valores exactos de `fact_tasks.status`; el código asume implícitamente que "no completada" equivale al valor literal `pending`, en vez de "cualquier valor distinto de `completed`". ¿Cómo se documenta/resuelve? → A: Se documenta explícitamente en Supuestos que "no completadas" se define como `status != 'completed'` (más flexible/robusto que asumir un valor fijo `pending`); el filtro "no completadas" del endpoint de tareas debe usar esta definición, no un valor hardcodeado, y el código (`analytics_router.py`, mapeo `not-completed -> pending`) queda marcado como discrepancia conocida a corregir durante `/plan`/`/implement`.
 - Q: El código ya implementado devuelve los 5 reportes de gráfico (top 5 apps, dispositivos, género, país, antigüedad de registro) como listas de objetos por ítem (formato "tabla cruda"), en vez de arrays paralelos `labels`/`values`, contradiciendo FR-016. ¿Cuál prevalece? → A: Prevalece la especificación (formato `labels`/`values`); los 5 endpoints ya implementados quedan marcados como discrepancia conocida a corregir durante `/plan`/`/implement` para transformar su respuesta al formato `{"labels": [...], "values": [...]}` (con arrays paralelos adicionales para datos como `percentage` cuando aplique), no se revierte la spec.
+
+### Sesión 2026-09-08 (documentación interactiva Swagger)
+
+- Q: ¿Qué alcance tiene "probar con Swagger": solo que la UI interactiva exista y liste los endpoints, o que cada endpoint sea efectivamente ejecutable ("Try it out") desde Swagger UI con respuestas reales del servicio (incluyendo, cuando aplique, autenticación de administrador)? → A: Debe ser completamente ejecutable ("Try it out") para cada endpoint, incluyendo poder autenticarse como administrador y usar esa sesión para probar los endpoints protegidos, no solo una lista de documentación estática.
+- Q: El endpoint de login de administrador (FR-001/002/020) todavía no está implementado. ¿La documentación Swagger debe esperar a que ese login exista, o se agrega aquí un login propio? → A: Se agrega un login mínimo de administrador **exclusivamente para fines de prueba** (no forma parte del alcance final del proyecto); el proyecto final tendrá una sección separada de login/registro para usuarios finales, donde el administrador podrá registrarse. Este login de prueba es temporal y desacoplado de ese flujo final, solo para poder ejercitar la Historia de Usuario 6 desde Swagger UI mientras el login definitivo no exista.
+- Q: FR-030 (ex FR-009 de `002-swagger-docs`) exige poder habilitar/deshabilitar Swagger UI según el entorno sin cambios de código, pero no existe hoy ningún mecanismo de configuración de entorno en el servicio (`config.py` no tiene un campo `environment`/`debug`). ¿Cómo se resuelve? → A: Se agrega un requisito explícito (FR-032): debe existir una variable de entorno configurable (ej. `ENVIRONMENT` o `ENABLE_DOCS`) que el servicio lea para decidir si expone la documentación interactiva, con un comportamiento seguro-por-defecto si no se especifica; el nombre exacto de la variable se define en `/plan`.
+- Q: FR-031 (ex FR-010) exige un login de prueba con "credenciales fijas simples", pero no especifica si esas credenciales deben leerse de variables de entorno o pueden estar hardcodeadas en el código, dado que `config.py` no tiene ningún campo `admin_user`/`admin_password`. ¿Cómo se resuelve? → A: Las credenciales del login de prueba también DEBEN leerse de variables de entorno (ej. `TEST_ADMIN_USER`/`TEST_ADMIN_PASSWORD`), nunca hardcodeadas en el código, manteniendo consistencia con la buena práctica ya establecida de no hardcodear credenciales, aun siendo este login desechable/temporal.
 
 ## Escenarios de Usuario y Pruebas *(obligatorio)*
 
@@ -151,6 +163,96 @@ usuario" (filtrado por `status = 'completed'`) sea explícitamente distinto del 
 
 ---
 
+### Historia de Usuario 4 - Explorar y entender los endpoints disponibles (Prioridad: P1)
+
+Como desarrollador o QA del equipo, quiero abrir una URL de documentación interactiva (Swagger UI)
+y ver listados todos los endpoints del servicio de reportes, agrupados de forma clara, con la
+descripción de sus parámetros, tipos de respuesta y códigos HTTP posibles, para poder entender
+rápidamente qué hace cada endpoint sin leer el código fuente.
+
+**Por qué esta prioridad**: Es el valor mínimo indispensable de la documentación: sin esto no hay
+forma de descubrir la API de forma autoguiada. Habilita al resto de las historias de
+documentación.
+
+**Prueba independiente**: Se puede probar completamente abriendo la URL de Swagger UI del
+servicio y verificando visualmente que aparecen todos los endpoints esperados, agrupados por
+sección (usuarios, tareas, competencias, dispositivos, etc.), con sus parámetros documentados.
+
+**Escenarios de Aceptación**:
+
+1. **Dado** que el servicio de reportes está corriendo, **Cuando** un desarrollador abre la URL
+   de documentación interactiva en el navegador, **Entonces** ve una página de Swagger UI con
+   todos los endpoints del servicio listados y agrupados por categoría.
+2. **Dado** que el desarrollador está viendo la documentación, **Cuando** expande un endpoint
+   cualquiera, **Entonces** ve sus parámetros de entrada (query params, body si aplica), los
+   posibles códigos de respuesta HTTP, y un ejemplo del cuerpo de respuesta.
+
+---
+
+### Historia de Usuario 5 - Ejecutar (probar) cualquier endpoint directamente desde Swagger (Prioridad: P1)
+
+Como desarrollador o QA, quiero poder presionar "Try it out", completar los parámetros necesarios
+y ejecutar cualquier endpoint directamente desde la misma página de Swagger UI, para verificar su
+comportamiento real contra el servicio corriendo, sin necesidad de usar herramientas externas
+(Postman, curl, etc.).
+
+**Por qué esta prioridad**: Es el requisito explícito del usuario ("al finalizar cada endpoint me
+debe dejar probarlos con Swagger"); sin ejecución real, la documentación es solo referencia
+pasiva y no cumple el objetivo de "probar".
+
+**Prueba independiente**: Se puede probar completamente seleccionando cualquier endpoint en
+Swagger UI, presionando "Try it out", completando los parámetros de ejemplo, ejecutando la
+solicitud, y verificando que la respuesta real (código HTTP + cuerpo JSON) se muestra en la misma
+página.
+
+**Escenarios de Aceptación**:
+
+1. **Dado** un endpoint público (que no requiere sesión de administrador, si existiera alguno),
+   **Cuando** el usuario presiona "Try it out", completa los parámetros y ejecuta, **Entonces**
+   Swagger UI muestra la respuesta real del servicio (código HTTP y cuerpo) sin errores de CORS
+   ni de conexión.
+2. **Dado** un endpoint protegido por sesión de administrador, **Cuando** el usuario aún no se
+   autenticó, **Entonces** al ejecutar recibe una respuesta 401 visible en Swagger UI (no un
+   error de red opaco), consistente con el comportamiento real de la API.
+3. **Dado** que el usuario ya se autenticó (ver Historia de Usuario 6) desde la misma página,
+   **Cuando** ejecuta un endpoint protegido con "Try it out", **Entonces** la sesión obtenida se
+   adjunta automáticamente a la solicitud y el endpoint responde con datos reales (200 con el
+   reporte correspondiente), no 401.
+
+---
+
+### Historia de Usuario 6 - Autenticarse como administrador desde la misma documentación (Prioridad: P2)
+
+Como desarrollador o QA, quiero poder ejecutar el endpoint de login de administrador desde
+Swagger UI y que la credencial de sesión resultante quede disponible para probar automáticamente
+el resto de los endpoints protegidos, sin tener que copiar/pegar manualmente un token en cada
+solicitud.
+
+**Por qué esta prioridad**: Mejora significativamente la experiencia de prueba end-to-end, pero
+la Historia de Usuario 5 ya es parcialmente utilizable (para endpoints sin protección o pegando
+el token a mano) sin esta historia, por eso es P2.
+
+**Prueba independiente**: Se puede probar completamente ejecutando el endpoint de login con
+credenciales válidas desde Swagger UI, usando el botón de autorización (candado) para cargar la
+credencial de sesión obtenida, y luego verificando que un endpoint protegido devuelve 200 al
+ejecutarse sin pasos manuales adicionales.
+
+**Escenarios de Aceptación**:
+
+1. **Dado** que el usuario conoce las credenciales de administrador de prueba, **Cuando**
+   ejecuta el endpoint de login desde Swagger UI con "Try it out", **Entonces** recibe la
+   credencial de sesión en la respuesta.
+2. **Dado** que el usuario obtuvo una credencial de sesión, **Cuando** la carga en el mecanismo
+   de autorización de Swagger UI (ej. botón "Authorize"), **Entonces** todas las solicitudes
+   posteriores hechas desde "Try it out" incluyen automáticamente esa credencial (ej. header
+   `Authorization`), sin que el usuario deba pegarla en cada endpoint por separado.
+3. **Dado** que la sesión cargada expiró (ver FR-002, expiración a medianoche), **Cuando** el
+   usuario ejecuta cualquier endpoint protegido desde Swagger UI, **Entonces** recibe 401 de
+   forma visible, indicando que debe volver a autenticarse y recargar la credencial de sesión en
+   el mecanismo de autorización.
+
+---
+
 ### Casos Límite
 
 - ¿Qué sucede si el rango de edad libre ingresado por el admin es inválido (mínimo mayor que
@@ -185,10 +287,24 @@ usuario" (filtrado por `status = 'completed'`) sea explícitamente distinto del 
 - ¿Qué pasa si un token/sesión de administrador expiró (incluyendo la expiración automática a
   las 00:00)? El sistema debe responder 401 y el Panel Admin debe poder distinguir esto de
   credenciales inválidas para redirigir a un nuevo login.
+- ¿Qué pasa si Swagger UI está deshabilitado o inaccesible en un entorno de producción? Debe
+  seguir existiendo la posibilidad de habilitarlo explícitamente en entornos de desarrollo/QA sin
+  requerir cambios de código, y estar deshabilitado o protegido en producción según se defina en
+  `/plan` (fuera del alcance de negocio decidir esto en detalle aquí).
+- ¿Qué pasa si un endpoint nuevo se agrega al servicio sin documentar sus parámetros? Debe
+  aparecer igual en Swagger UI (por generación automática desde el framework), aunque con
+  descripciones mínimas; no debe romper la carga de la página de documentación.
+- ¿Qué pasa si el usuario intenta ejecutar un endpoint con parámetros inválidos desde "Try it
+  out"? Debe mostrar la respuesta real de error (422) del servicio, igual que si se llamara desde
+  cualquier otro cliente HTTP.
+- ¿Qué pasa si dos personas prueban simultáneamente desde distintas pestañas/navegadores con
+  distintas sesiones de administrador? Dado que solo existe una cuenta de administrador (ver
+  FR-020), ambas sesiones son válidas de forma independiente mientras no expiren; no hay conflicto
+  de datos porque los endpoints son de solo lectura.
 
 ## Requisitos *(obligatorio)*
 
-### Requisitos Funcionales
+### Requisitos Funcionales — API de Reportes
 
 - **FR-001**: El sistema DEBE proveer un endpoint de login para administradores que reciba usuario
   y contraseña y devuelva una credencial de sesión (token) reutilizable en el resto de los
@@ -309,6 +425,53 @@ usuario" (filtrado por `status = 'completed'`) sea explícitamente distinto del 
   `indexes.sql` son exclusivamente índices de PostgreSQL y no forman parte de esta capa de
   caché.
 
+### Requisitos Funcionales — Documentación Interactiva (Swagger)
+
+- **FR-023**: El sistema DEBE exponer una página de documentación interactiva (Swagger UI) en una
+  URL conocida y accesible mientras el servicio esté corriendo en entornos de desarrollo/QA.
+- **FR-024**: La página de documentación interactiva DEBE listar automáticamente todos los
+  endpoints expuestos por el servicio de reportes (los 13 reportes más el endpoint de login de
+  administrador), agrupados por categoría/tag, sin requerir mantenimiento manual de una lista
+  separada.
+- **FR-025**: Cada endpoint listado DEBE mostrar, como mínimo: método HTTP, ruta, parámetros de
+  entrada esperados (query params y/o cuerpo), los códigos de respuesta HTTP posibles, y un
+  ejemplo de la estructura de la respuesta exitosa.
+- **FR-026**: El sistema DEBE permitir ejecutar ("Try it out") cualquier endpoint directamente
+  desde la página de documentación interactiva, contra la instancia real del servicio en
+  ejecución, mostrando la respuesta real (código HTTP + cuerpo) en la misma página.
+- **FR-027**: El sistema DEBE proveer, dentro de la misma página de documentación interactiva, un
+  mecanismo para que el usuario cargue la credencial de sesión de administrador obtenida del
+  endpoint de login (ej. mediante el botón "Authorize" estándar de Swagger UI), de forma que las
+  ejecuciones posteriores de endpoints protegidos incluyan automáticamente esa credencial sin
+  intervención manual adicional por solicitud.
+- **FR-028**: Al ejecutar desde "Try it out" un endpoint protegido sin una credencial de sesión
+  válida cargada, el sistema DEBE mostrar en la página de documentación la respuesta real 401 del
+  servicio (no un error genérico de red ni de CORS).
+- **FR-029**: Al ejecutar desde "Try it out" un endpoint con parámetros inválidos, el sistema
+  DEBE mostrar la respuesta real de error (422) del servicio, igual que a través de cualquier
+  otro cliente HTTP.
+- **FR-030**: La documentación interactiva NO DEBE requerir edición manual duplicada cada vez que
+  se agregue, modifique o elimine un endpoint del servicio; debe reflejar automáticamente los
+  endpoints existentes en cada momento.
+- **FR-031**: Dado que el login de administrador definitivo (FR-001/002/020) puede no estar
+  implementado al momento de ejecutar la documentación interactiva, el sistema DEBE proveer un
+  endpoint de login de administrador **mínimo y exclusivamente de prueba** (credenciales fijas
+  simples leídas de variables de entorno dedicadas —p. ej. `TEST_ADMIN_USER`/
+  `TEST_ADMIN_PASSWORD`—, nunca hardcodeadas en el código, aunque sin necesariamente cumplir
+  todos los demás requisitos de seguridad de FR-020, como el hasheo de contraseña), únicamente
+  para poder emitir una credencial de sesión utilizable en el mecanismo "Authorize" de Swagger UI
+  y así ejercitar la Historia de Usuario 6. Este endpoint de prueba: (a) NO forma parte del
+  alcance final del proyecto, (b) NO reemplaza ni debe confundirse con el login definitivo de
+  administrador (FR-001/002/020) ni con la sección de login/registro de usuarios finales del
+  proyecto final (donde el administrador podrá registrarse), y (c) DEBE quedar claramente
+  identificado (ej. en su descripción/tag en Swagger UI) como "solo para pruebas", para que no se
+  use por error como mecanismo de autenticación de producción.
+- **FR-032**: El sistema DEBE leer de una variable de entorno (ej. `ENVIRONMENT` o
+  `ENABLE_DOCS`), configurable sin cambios de código, el valor que determina si la documentación
+  interactiva (Swagger UI) y su documento OpenAPI subyacente quedan expuestos o no; por defecto,
+  en ausencia de configuración explícita, el sistema DEBE comportarse de forma seguro-por-defecto
+  (ej. expuesto en desarrollo, oculto si no se especifica el entorno como desarrollo/QA).
+
 ### Entidades Clave
 
 - **Administrador (Admin)**: Cuenta única e interna que usa el Panel Admin, definida vía
@@ -332,10 +495,17 @@ usuario" (filtrado por `status = 'completed'`) sea explícitamente distinto del 
 - **Entrada de caché de reporte**: Copia temporal (con TTL) del resultado ya calculado de un
   reporte, almacenada en Redis y servida en lugar de recalcular contra PostgreSQL; no es una
   fuente de verdad, se invalida completamente tras cada corrida del ETL nocturno (ver FR-022).
+- **Documento OpenAPI**: Descripción estructurada (generada automáticamente por el framework del
+  servicio) de todos los endpoints, sus parámetros, tipos de datos y respuestas posibles; es la
+  fuente que consume Swagger UI para renderizarse.
+- **Sesión de administrador (de prueba o definitiva)**: Credencial obtenida del endpoint de login
+  (temporal de pruebas, FR-031, o definitivo, FR-001/002/020, según cuál esté disponible),
+  cargada en el mecanismo de autorización de Swagger UI para probar endpoints protegidos sin
+  pasos manuales adicionales.
 
 ## Criterios de Éxito *(obligatorio)*
 
-### Resultados Medibles
+### Resultados Medibles — API de Reportes
 
 - **SC-001**: El administrador puede autenticarse y obtener acceso a los 13 reportes en menos de
   10 segundos desde el login exitoso.
@@ -362,6 +532,21 @@ usuario" (filtrado por `status = 'completed'`) sea explícitamente distinto del 
   claves de caché de reportes quedan invalidadas dentro de los primeros minutos posteriores a la
   finalización de cada corrida del ETL, verificable comparando el resultado de un reporte antes y
   después de una corrida de prueba del ETL con datos nuevos.
+
+### Resultados Medibles — Documentación Interactiva
+
+- **SC-009**: Un desarrollador o QA que nunca vio el código puede, únicamente con la URL de
+  Swagger UI, identificar los 13 reportes y el endpoint de login, y describir correctamente sus
+  parámetros de entrada, en menos de 5 minutos.
+- **SC-010**: El 100% de los endpoints del servicio de reportes pueden ejecutarse exitosamente
+  ("Try it out") desde Swagger UI y devolver la misma respuesta que se obtendría llamándolos con
+  cualquier otro cliente HTTP (ej. `curl`), para el mismo conjunto de parámetros.
+- **SC-011**: Un usuario puede autenticarse y probar un endpoint protegido completo (login +
+  carga de sesión + ejecución de un reporte protegido) sin salir de la página de Swagger UI ni
+  usar herramientas externas, en menos de 2 minutos.
+- **SC-012**: Agregar un endpoint nuevo al servicio no requiere ninguna edición manual adicional
+  en un archivo de documentación separado para que aparezca en Swagger UI; aparece
+  automáticamente tras reiniciar el servicio.
 
 ## Supuestos
 
@@ -397,16 +582,24 @@ usuario" (filtrado por `status = 'completed'`) sea explícitamente distinto del 
   acceso a todos los reportes); si en el futuro se necesitan roles distintos, será una extensión
   posterior fuera de este alcance.
 - Los 13 reportes se sirven mediante una capa de caché de solo lectura (Redis, read-through) que
-  guarda cada resultado ya agregado con un TTL diferenciado según la variabilidad del reporte
-  (corto para reportes de alta variabilidad como usuarios activos por día, más largo para
-  distribuciones que cambian poco como género o país), evitando recalcularlo contra PostgreSQL en
-  cada request; en cache-miss se calcula contra PostgreSQL y se guarda en caché. El proceso ETL
-  invalida explícitamente (push directo) todas las claves de caché de reportes al finalizar cada
-  corrida, en vez de depender únicamente de la expiración natural del TTL, según se definió en la
-  sesión de clarificación del 2026-09-07 (ver FR-022). `indexes.sql` no forma parte de esta capa
-  de caché; solo contiene índices de PostgreSQL sobre las tablas `dim_*`/`fact_*`.
-- Para el reporte de FR-009 (promedio de tareas / tareas completadas por usuario, con filtro de
-  estado), "no completadas" se define como `fact_tasks.status != 'completed'` (cualquier valor
-  distinto de `'completed'`), no como un valor literal fijo específico (ej. `'pending'`). Esta
-  definición es más robusta ante la posible existencia de otros valores intermedios de estado
-  (ej. `'in_progress'`) y evita que el filtro "no completadas" excluya registros por error.
+  guarda cada resultado ya agregado con un TTL diferenciado según la variabilidad del reporte.
+- El framework HTTP usado por el servicio (FastAPI) genera automáticamente el documento OpenAPI y
+  expone Swagger UI de forma nativa; la documentación interactiva se apoya en esa capacidad nativa
+  en vez de construir una solución de documentación desde cero.
+- El mecanismo de autorización de Swagger UI (botón "Authorize") es suficiente para cumplir el
+  requisito de "cargar la sesión una vez y probar el resto de los endpoints"; no se requiere un
+  flujo de autenticación visual adicional fuera de lo que Swagger UI ofrece por defecto.
+- El nombre exacto de la variable de entorno (ej. `ENVIRONMENT`, `ENABLE_DOCS`), sus valores
+  posibles, y el comportamiento seguro-por-defecto exacto se definen con precisión durante
+  `/plan` (ver FR-032); lo que este spec fija como requisito de negocio es que dicho control
+  exista y sea configurable sin cambios de código, no el nombre/formato literal de la variable.
+- La documentación interactiva no introduce nuevos endpoints de negocio; únicamente garantiza que
+  los endpoints ya definidos en este mismo feature sean descubribles y ejecutables desde Swagger
+  UI.
+- El endpoint de login de administrador de prueba (FR-031) es **estrictamente temporal y de
+  alcance de prueba**: no forma parte de la versión final del proyecto. El proyecto final NO
+  contempla login/registro en este módulo de reportes; existe una sección separada del sistema
+  (fuera de este repo/módulo) donde los usuarios finales inician sesión y donde el administrador
+  podrá registrarse. Este login de prueba se retira o se reemplaza cuando ese flujo definitivo
+  esté disponible, sin que su existencia temporal condicione el diseño final de autenticación del
+  proyecto.

@@ -1,0 +1,443 @@
+openapi: 3.0.3
+info:
+  title: Admin Analytics Service — API de Reportes
+  description: >
+    API de solo lectura/agregación sobre PostgreSQL (poblado por ETL externo) para el Panel de
+    Administración. Requiere autenticación de administrador (cuenta única). Incluye un login de
+    prueba exclusivamente para ejercitar Swagger UI mientras el flujo definitivo de usuarios
+    finales no esté disponible (ver spec FR-031). Ver `specs/001-reportes-fastapi/spec.md`.
+  version: "1.0.0"
+servers:
+  - url: /api/admin
+    description: Servidor del servicio (prefijo de todas las rutas)
+
+tags:
+  - name: auth
+    description: Autenticación de administrador (login definitivo).
+  - name: auth-test-only
+    description: >
+      Login MINIMO exclusivamente de prueba, para poder usar el botón "Authorize" de Swagger UI
+      mientras el login definitivo no esté implementado. No usar en producción.
+  - name: analytics
+    description: Los 13 reportes de solo lectura/agregación del Panel Admin.
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Login de administrador (definitivo)
+      description: >
+        Valida usuario/contraseña contra la cuenta única de administrador (credenciales en
+        variables de entorno, contraseña hasheada). Emite un token cuya expiración es la próxima
+        medianoche en la zona horaria enviada por el cliente (FR-002).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              username: admin
+              password: "changeme"
+              timezone: "America/Argentina/Buenos_Aires"
+      responses:
+        "200":
+          description: Login exitoso.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /auth/test-login:
+    post:
+      tags: [auth-test-only]
+      summary: "[SOLO PRUEBAS] Login de administrador de prueba para Swagger"
+      description: >
+        Endpoint temporal y exclusivamente de prueba (FR-031). Valida contra credenciales de
+        prueba separadas (variables de entorno `TEST_ADMIN_USER`/`TEST_ADMIN_PASSWORD`). No forma
+        parte del alcance final del proyecto ni reemplaza el login definitivo de administrador.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login de prueba exitoso.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /analytics/users/total:
+    get:
+      tags: [analytics]
+      summary: Cantidad total de usuarios registrados
+      operationId: getTotalUsers
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CountResponse"
+              example: { total_users: 100 }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /analytics/users/active:
+    get:
+      tags: [analytics]
+      summary: Cantidad de usuarios activos por período
+      operationId: getActiveUsers
+      parameters:
+        - $ref: "#/components/parameters/ClientTimezone"
+        - name: period
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [day, week, month, total]
+        - name: period_key
+          in: query
+          required: false
+          description: >
+            Requerido si period != total. Formato 'YYYY-MM-DD' (day), 'YYYY-WW' (week),
+            'YYYY-MM' (month).
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActiveUsersResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: >
+            Filtro inválido (ej. falta period_key cuando period != total). Reemplaza el
+            comportamiento previo de responder 200 con {"error": ...}.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /analytics/screen-time/age-range:
+    get:
+      tags: [analytics]
+      summary: Promedio de tiempo en pantalla por rango de edad
+      operationId: getScreenTimeByAgeRange
+      parameters:
+        - name: min_age
+          in: query
+          required: true
+          schema: { type: integer, minimum: 0 }
+        - name: max_age
+          in: query
+          required: true
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: OK (avg_minutes es null si no hay datos para el rango, no un error)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgeRangeAverageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: min_age/max_age inválidos (negativos o min_age > max_age).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /analytics/apps/top5:
+    get:
+      tags: [analytics]
+      summary: Top 5 de apps con mayor promedio de tiempo en pantalla
+      operationId: getTopFiveApps
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabelsValuesResponse"
+              example:
+                labels: ["Instagram", "TikTok", "YouTube", "WhatsApp", "X"]
+                values: [95.2, 88.1, 60.4, 45.0, 30.2]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /analytics/challenges/summary:
+    get:
+      tags: [analytics]
+      summary: Total de competencias, promedio por usuario y promedio completadas por usuario
+      operationId: getChallengesSummary
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChallengesSummaryResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /analytics/tasks/summary:
+    get:
+      tags: [analytics]
+      summary: Promedio de tareas y tareas completadas por usuario
+      operationId: getTasksSummary
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [all, completed, not-completed]
+            default: all
+          description: >
+            'not-completed' se define como status != 'completed' (no un valor literal fijo).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TasksSummaryResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /analytics/devices:
+    get:
+      tags: [analytics]
+      summary: Usuarios agrupados por dispositivo
+      operationId: getUsersByDevice
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabelsValuesResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /analytics/registration-period:
+    get:
+      tags: [analytics]
+      summary: Usuarios agrupados por antigüedad desde el registro
+      operationId: getUsersByRegistrationPeriod
+      parameters:
+        - $ref: "#/components/parameters/ClientTimezone"
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [last_week, last_month, last_3_months, last_year, all]
+            default: all
+      responses:
+        "200":
+          description: OK, listo para graficar como barras.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabelsValuesResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /analytics/age/average:
+    get:
+      tags: [analytics]
+      summary: Promedio de edad de los usuarios (excluye NULL)
+      operationId: getAverageUserAge
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AverageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /analytics/gender:
+    get:
+      tags: [analytics]
+      summary: Distribución porcentual de usuarios por género (3 categorías fijas + sin dato)
+      operationId: getUsersByGender
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabelsValuesResponse"
+              example:
+                labels: ["Hombre", "Mujer", "No binario", "sin dato"]
+                values: [40, 35, 5, 20]
+                percentages: [50.0, 43.75, 6.25, 20.0]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /analytics/country:
+    get:
+      tags: [analytics]
+      summary: Distribución de usuarios por país (global o filtrado por país puntual)
+      operationId: getUsersByCountry
+      parameters:
+        - name: country
+          in: query
+          required: false
+          description: País puntual. Si se omite, devuelve todos los países.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabelsValuesResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-or-jwt
+      description: >
+        Token obtenido de /auth/login o /auth/test-login. Cargar en el botón "Authorize" de
+        Swagger UI para que se adjunte automáticamente a todos los "Try it out" (FR-005/027).
+
+  parameters:
+    ClientTimezone:
+      name: X-Client-Timezone
+      in: header
+      required: false
+      description: >
+        Zona horaria IANA vigente del cliente/admin (ej. America/Argentina/Buenos_Aires), usada
+        para calcular límites de período (FR-021). Default si se omite: UTC (NEEDS
+        CLARIFICATION, ver research.md).
+      schema:
+        type: string
+
+  responses:
+    Unauthorized:
+      description: Credencial ausente, inválida o expirada.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example: { detail: "No autenticado o sesión expirada" }
+    ValidationError:
+      description: Parámetros de filtro inválidos.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [username, password, timezone]
+      properties:
+        username: { type: string }
+        password: { type: string, format: password }
+        timezone:
+          type: string
+          description: Zona horaria IANA vigente del cliente al momento del login.
+          example: "America/Argentina/Buenos_Aires"
+
+    TokenResponse:
+      type: object
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, example: bearer }
+        expires_at:
+          type: integer
+          format: int64
+          description: Epoch ms de expiración (próxima medianoche en la tz del login).
+
+    ErrorResponse:
+      type: object
+      properties:
+        detail: { type: string }
+
+    CountResponse:
+      type: object
+      properties:
+        total_users: { type: integer }
+
+    ActiveUsersResponse:
+      type: object
+      properties:
+        period: { type: string }
+        period_key: { type: string, nullable: true }
+        active_users: { type: integer }
+
+    AverageResponse:
+      type: object
+      properties:
+        avg_age:
+          type: number
+          nullable: true
+          description: null explícito si no hay datos (nunca 0 engañoso).
+
+    AgeRangeAverageResponse:
+      type: object
+      properties:
+        age_range: { type: string, example: "18-25" }
+        avg_minutes: { type: number, nullable: true }
+
+    LabelsValuesResponse:
+      type: object
+      required: [labels, values]
+      properties:
+        labels:
+          type: array
+          items: { type: string }
+        values:
+          type: array
+          items: { type: number }
+        percentages:
+          type: array
+          items: { type: number }
+          description: Presente solo en reportes de distribución (género, país).
+
+    ChallengesSummaryResponse:
+      type: object
+      properties:
+        total_challenges: { type: integer }
+        avg_challenges_per_user: { type: number, nullable: true }
+        avg_completed_challenges_per_user: { type: number, nullable: true }
+
+    TasksSummaryResponse:
+      type: object
+      properties:
+        status_filter: { type: string, enum: [all, completed, not-completed] }
+        avg_tasks_per_user: { type: number, nullable: true }
+        avg_completed_tasks_per_user: { type: number, nullable: true }
