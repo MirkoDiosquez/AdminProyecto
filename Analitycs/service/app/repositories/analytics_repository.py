@@ -62,11 +62,13 @@ class AnalyticsRepository:
             return row[0]
 
     def top_five_apps_by_screen_time(self):
+        """FR-008 / edge case: desempate deterministico por app_label ASC cuando
+        dos o mas apps empatan en avg_minutes (data-model.md §2 regla 3)."""
         sql = """
             SELECT package_name, MAX(app_label) AS app_label, AVG(minutes_used) AS avg_minutes
             FROM fact_app_usage
             GROUP BY package_name
-            ORDER BY avg_minutes DESC
+            ORDER BY avg_minutes DESC, app_label ASC
             LIMIT 5
         """
         with get_pool().connection() as conn:
@@ -125,10 +127,26 @@ class AnalyticsRepository:
             row = conn.execute(sql).fetchone()
             return row[0]
 
+    def average_not_completed_tasks_per_user(self) -> Optional[float]:
+        """FR-009: 'no completada' = status != 'completed' (nunca un valor literal
+        fijo como 'pending'), data-model.md §2 regla 2."""
+        sql = """
+            SELECT AVG(cnt) FROM (
+                SELECT COUNT(*) FILTER (WHERE status != 'completed') AS cnt
+                FROM fact_tasks GROUP BY user_id
+            ) t
+        """
+        with get_pool().connection() as conn:
+            row = conn.execute(sql).fetchone()
+            return row[0]
+
     def tasks_by_status(self, status_filter: Optional[str] = None):
-        if status_filter and status_filter != "all":
-            sql = "SELECT status, COUNT(*) FROM fact_tasks WHERE status = %s GROUP BY status"
-            params = (status_filter,)
+        if status_filter == "completed":
+            sql = "SELECT status, COUNT(*) FROM fact_tasks WHERE status = 'completed' GROUP BY status"
+            params = ()
+        elif status_filter == "not-completed":
+            sql = "SELECT status, COUNT(*) FROM fact_tasks WHERE status != 'completed' GROUP BY status"
+            params = ()
         else:
             sql = "SELECT status, COUNT(*) FROM fact_tasks GROUP BY status"
             params = ()
@@ -175,11 +193,16 @@ class AnalyticsRepository:
             return row[0]
 
     def users_by_gender(self):
+        """FR-014: agrupamiento forzado a 3 categorias fijas + 'sin dato' via
+        CASE WHEN (data-model.md §2.1), en vez de GROUP BY gender crudo."""
         sql = """
-            SELECT gender, COUNT(*) AS cnt,
-                   ROUND(COUNT(*) * 100.0 / NULLIF((SELECT COUNT(*) FROM dim_users), 0), 2) AS pct
+            SELECT
+                CASE WHEN gender IN ('Hombre','Mujer','No binario') THEN gender
+                     ELSE 'sin dato' END AS gender_bucket,
+                COUNT(*) AS cnt,
+                ROUND(COUNT(*) * 100.0 / NULLIF((SELECT COUNT(*) FROM dim_users), 0), 2) AS pct
             FROM dim_users
-            GROUP BY gender
+            GROUP BY gender_bucket
             ORDER BY cnt DESC
         """
         with get_pool().connection() as conn:

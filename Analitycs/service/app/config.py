@@ -28,6 +28,27 @@ class Settings(BaseSettings):
     # Firebase (ETL)
     firebase_credentials_path: str = "./firebase-service-account.json"
 
+    # Entorno / Swagger (FR-032, T005) — controla si /docs, /redoc y /openapi.json
+    # se exponen. Seguro-por-defecto: solo "development"/"qa" habilitan Swagger.
+    environment: str = "development"
+
+    # Autenticacion de administrador definitivo (FR-020, FR-002). Un unico admin
+    # con credenciales fijas leidas de variables de entorno, sin tabla en PostgreSQL.
+    admin_username: str
+    admin_password_hash: str
+
+    # Login de prueba EXCLUSIVO para Swagger (FR-031) — separado del admin real,
+    # comparacion directa sin hash (relajacion explicita permitida solo aqui).
+    test_admin_user: str
+    test_admin_password: str
+
+    # Zona horaria por defecto si el cliente no envia X-Client-Timezone (research.md §2).
+    default_client_timezone: str = "UTC"
+
+    # Secreto compartido para el endpoint interno de invalidacion de cache,
+    # llamado por el ETL tras cada corrida (FR-022, research.md §3).
+    etl_cache_invalidation_secret: str
+
     @property
     def postgres_dsn(self) -> str:
         return (

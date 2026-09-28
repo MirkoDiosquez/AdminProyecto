@@ -6,3 +6,15 @@ redis==5.0.8
 pydantic-settings==2.4.0
 firebase-admin==6.5.0
 python-dotenv==1.0.1
+
+# Testing (T001) — pytest/pytest-asyncio/httpx: correr y automatizar los tests de
+# integracion/unidad (Principio VI, tasks.md T001). httpx es requerido por
+# fastapi.testclient.TestClient para hacer requests HTTP reales contra la app en memoria.
+pytest==8.3.3
+pytest-asyncio==0.24.0
+httpx==0.27.2
+
+# bcrypt (T001) — hash/verify del password de administrador (FR-020). No se agrega ningun
+# framework de auth adicional (ej. Authlib/python-jose): el token de sesion se firma a mano
+# con hmac/hashlib de la stdlib (research.md Opcion C), bcrypt solo protege el password.
+bcrypt==4.2.0
