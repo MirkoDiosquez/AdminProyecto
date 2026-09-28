@@ -315,11 +315,11 @@ mínimas, nunca el dataset de producción.
 
 | Riesgo/Decisión | Detalle | Mitigación / Estado |
 |---|---|---|
-| Mecanismo exacto de comunicar la tz del cliente no está cerrado por `spec.md` | FR-002/021 exigen usar "la tz vigente del cliente" pero delegan el mecanismo a `/plan`. | Propuesto: header `X-Client-Timezone` + campo `timezone` en login (§8). **Confirmar con Panel Admin (frontend) antes de `/implement`.** |
+| Mecanismo exacto de comunicar la tz del cliente | Header `X-Client-Timezone` + campo `timezone` en login. | ✅ **Resuelto (clarify 2026-09-15)**: contrato cerrado de este lado; el Panel Admin (frontend) debe adaptarse. |
 | Formato/estrategia de token de sesión no especificado en detalle por `spec.md` | Solo se exige "credencial de sesión" con expiración a medianoche. | Se define en `research.md` (opciones evaluadas: JWT firmado stateless vs. token opaco + Redis). |
-| Invalidación de caché post-ETL depende de un proceso externo a este repo | El "otro equipo" (ver conversación previa) implementa el ETL; este feature solo expone `invalidate_pattern()`. | Documentado como **contrato pendiente** en §7/§14; no se implementa el lado ETL aquí. |
+| Invalidación de caché post-ETL depende de un proceso externo a este repo | El "otro equipo" implementa el ETL; este feature solo expone `invalidate_pattern()`. | ✅ **Resuelto (clarify 2026-09-15)**: endpoint interno + secreto compartido vía header `X-Internal-Secret`. Nombre exacto del endpoint/variable a fijar en `/speckit-tasks`. |
 | Comportamiento de Redis caído no estaba en `spec.md` | Se definió fail-open hacia PostgreSQL. | Documentado explícitamente como decisión técnica nueva (no de negocio) en `research.md`. |
-| Valor por defecto de tz si el cliente no la envía | No cerrado por `spec.md`. | Marcado `NEEDS CLARIFICATION` en `research.md`; default propuesto `UTC` hasta confirmación. |
+| Valor por defecto de tz si el cliente no la envía | No cerrado por `spec.md`. | ✅ **Resuelto (clarify 2026-09-15)**: `UTC`. |
 | Login de prueba Swagger conviviendo con login definitivo | Ambos emiten el mismo tipo de token; riesgo de confusión de uso en producción. | Mitigado con tag `auth-test-only` + descripción explícita + variables de entorno separadas (FR-031). |
 
 ## 14. Dependencias y contratos externos
@@ -327,8 +327,8 @@ mínimas, nunca el dataset de producción.
 | Contrato | Con quién | Estado |
 |---|---|---|
 | Esquema PostgreSQL (`postgre.sql`, `indexes.sql`) | Proceso ETL (otro equipo) | ✅ Confirmado — este feature es estrictamente de solo lectura sobre ese esquema, sin cambios. |
-| Invalidación de caché Redis tras cada corrida ETL | Proceso ETL (otro equipo) | ⚠️ **Pendiente de confirmar por escrito**: este feature expone `invalidate_pattern("admin:analytics:*")`, pero *quién* la invoca y *cómo* (llamada HTTP interna protegida, script, mensaje) no está definido. No se implementa el lado ETL en este feature. |
-| Envío de la zona horaria del cliente | Panel Admin (React), fuera de este repo | ⚠️ **Pendiente de confirmar**: se propone header `X-Client-Timezone` + campo `timezone` en login; el frontend debe adoptar este contrato. |
+| Invalidación de caché Redis tras cada corrida ETL | Proceso ETL (otro equipo) | ✅ **Resuelto (clarify 2026-09-15)**: endpoint interno HTTP protegido por secreto compartido (header `X-Internal-Secret`, variable de entorno dedicada, ej. `ETL_CACHE_INVALIDATION_SECRET`). Nombre exacto de ruta/variable se fija en `/speckit-tasks`. |
+| Envío de la zona horaria del cliente | Panel Admin (React), fuera de este repo | ✅ **Resuelto (clarify 2026-09-15)**: contrato cerrado de este lado — header `X-Client-Timezone` + campo `timezone` en login; el frontend debe adoptarlo, no es una negociación abierta. |
 | Consumo de los 13 endpoints + login | Panel Admin (React) | Contrato REST completo documentado en `contracts/openapi.yaml` (fuente de verdad para el frontend). |
 
 No se asume ningún contrato adicional no mencionado en `spec.md`.

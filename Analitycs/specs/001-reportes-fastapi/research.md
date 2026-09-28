@@ -51,9 +51,9 @@ body de login para calcular la expiración de sesión). Es la que más fielmente
 horaria vigente del cliente/admin **al momento de la solicitud**" (FR-002/FR-021), ya que cada
 request de reporte puede llevar su propia tz vigente, independiente de cuándo se hizo login.
 
-**Default si el header no se envía**: `NEEDS CLARIFICATION` — se propone `UTC` como valor por
-defecto seguro (determinístico, sin sorpresas), pero debe confirmarse con el equipo antes de
-`/speckit-tasks`, ya que no está definido en `spec.md`.
+**Default si el header no se envía**: **Resuelto (clarify 2026-09-15) → `UTC`**. Es determinístico
+y sin sorpresas; se documenta como valor de configuración (`DEFAULT_CLIENT_TIMEZONE=UTC` en
+`quickstart.md`), no como literal hardcodeado en el código.
 
 ## 3. Estrategia de invalidación de caché post-ETL
 
@@ -69,11 +69,14 @@ analytics_cache.py` ya expone `invalidate_pattern()`, pero no existe un "dispara
 | C. Mensaje/evento (ej. una cola) que este servicio consume para disparar la invalidación. | Más robusto ante fallos de red puntuales. | Introduce infraestructura de mensajería nueva no justificada por el alcance de este feature (la Constitución ya fija RabbitMQ para Notificaciones, no para esto). |
 
 **Decisión**: **Opción A** (endpoint interno HTTP), por ser la que respeta mejor la independencia
-de capas (Principio I) sin introducir infraestructura nueva. **Queda como contrato pendiente de
-confirmar por escrito con el equipo del ETL** (ver `plan.md` §14): el nombre exacto del endpoint,
-su mecanismo de autenticación (ej. un secreto compartido distinto del login de admin, ya que el
-ETL no es un humano) y la red desde la que se invoca, se definen en `/speckit-tasks` una vez
-confirmado. No se implementa el lado ETL en este feature.
+de capas (Principio I) sin introducir infraestructura nueva. Su autenticación **(resuelto,
+clarify 2026-09-15)**: secreto compartido simple vía header dedicado (ej.
+`X-Internal-Secret: <valor>`), comparado en el servidor con `hmac.compare_digest` (nunca `==`
+directo, para evitar timing attacks), y el valor vive en una variable de entorno propia (ej.
+`ETL_CACHE_INVALIDATION_SECRET`), separada de las credenciales de admin humano y de las de prueba
+Swagger. **Queda como contrato pendiente de confirmar por escrito con el equipo del ETL** (ver
+`plan.md` §14): el nombre exacto del endpoint y la variable de entorno se fijan en
+`/speckit-tasks`. No se implementa el lado ETL en este feature.
 
 ## 4. Comportamiento ante Redis no disponible
 
@@ -134,11 +137,14 @@ fixtures SQL mínimas — no se introduce un ORM ni una librería de fixtures ad
 
 ## Resumen de puntos `NEEDS CLARIFICATION` abiertos
 
-1. Valor por defecto de zona horaria si el cliente no envía `X-Client-Timezone` (propuesto: `UTC`).
-2. Mecanismo exacto de autenticación del endpoint interno de invalidación de caché para el ETL
-   (propuesto: secreto compartido vía variable de entorno, distinto del login de admin humano).
-3. Confirmación del frontend (Panel Admin) para adoptar el header `X-Client-Timezone` y el campo
-   `timezone` en login.
+Todos los puntos abiertos se resolvieron en la sesión de clarify del 2026-09-15:
 
-Estos 3 puntos no bloquean el resto del diseño (Fase 1) porque tienen un default razonable
-documentado, pero deben resolverse antes de `/speckit-implement`.
+1. ~~Valor por defecto de zona horaria~~ → **Resuelto: `UTC`** (§2).
+2. ~~Mecanismo de autenticación del endpoint interno de invalidación~~ → **Resuelto: secreto
+   compartido vía header `X-Internal-Secret`** (§3).
+3. ~~Adopción del header `X-Client-Timezone`/campo `timezone` por el frontend~~ → **Resuelto:
+   contrato cerrado de este lado** (backend define el contrato; el Panel Admin/React debe
+   adaptarse a `X-Client-Timezone` y al campo `timezone` en el login, no es una negociación
+   abierta).
+
+Ninguno de estos 3 puntos bloquea `/speckit-tasks`.

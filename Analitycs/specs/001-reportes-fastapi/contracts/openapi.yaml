@@ -20,6 +20,10 @@ tags:
       mientras el login definitivo no esté implementado. No usar en producción.
   - name: analytics
     description: Los 13 reportes de solo lectura/agregación del Panel Admin.
+  - name: internal
+    description: >
+      Endpoints internos consumidos por procesos automatizados (ej. el ETL), nunca por el
+      Panel Admin ni por Swagger UI con sesión de administrador humano.
 
 security:
   - bearerAuth: []
@@ -323,6 +327,29 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /internal/cache/invalidate-reports:
+    post:
+      tags: [internal]
+      summary: "[INTERNO] Invalidar toda la caché de reportes (llamado por el ETL)"
+      description: >
+        Resuelto en clarify (2026-09-15): endpoint interno que el proceso ETL invoca al finalizar
+        cada corrida, para invalidar explícitamente todas las claves de caché de reportes
+        (FR-022), evitando que algún reporte muestre datos con más de un ciclo ETL de antigüedad
+        (SC-008). No requiere sesión de administrador humano; se autentica exclusivamente vía
+        `X-Internal-Secret`. Nombre exacto de ruta y de la variable de entorno del secreto a
+        confirmar en /speckit-tasks.
+      security:
+        - internalSecret: []
+      responses:
+        "204":
+          description: Caché de reportes invalidada exitosamente (sin contenido).
+        "401":
+          description: Secreto interno ausente o inválido.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -332,6 +359,14 @@ components:
       description: >
         Token obtenido de /auth/login o /auth/test-login. Cargar en el botón "Authorize" de
         Swagger UI para que se adjunte automáticamente a todos los "Try it out" (FR-005/027).
+    internalSecret:
+      type: apiKey
+      in: header
+      name: X-Internal-Secret
+      description: >
+        Secreto compartido (resuelto en clarify 2026-09-15) usado exclusivamente por el proceso
+        ETL para invalidar la caché de reportes tras cada corrida. Nunca se usa como mecanismo de
+        autenticación de administrador humano ni se expone en Swagger UI con "Authorize".
 
   parameters:
     ClientTimezone:

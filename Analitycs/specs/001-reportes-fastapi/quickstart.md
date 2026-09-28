@@ -38,8 +38,11 @@ ADMIN_PASSWORD_HASH=<hash-bcrypt-o-similar>
 TEST_ADMIN_USER=<reemplazar>
 TEST_ADMIN_PASSWORD=<reemplazar>
 
-# Zona horaria por defecto si el cliente no envía X-Client-Timezone (ver research.md, NEEDS CLARIFICATION)
+# Zona horaria por defecto si el cliente no envía X-Client-Timezone (resuelto en clarify: UTC)
 DEFAULT_CLIENT_TIMEZONE=UTC
+
+# Secreto compartido para el endpoint interno de invalidación de caché (llamado por el ETL)
+ETL_CACHE_INVALIDATION_SECRET=<reemplazar>
 ```
 
 ## 3. Levantar el servicio
