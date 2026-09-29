@@ -4,7 +4,7 @@
 --   - gender: 'Hombre', 'Mujer', 'No binario', 'otro' (fuera de catalogo) y NULL -> "sin dato"
 --   - age: rango 18-65 + NULL (para promedio con exclusion de NULL)
 --   - country: 'Argentina', 'Brasil', 'Chile' + NULL
---   - device: 'android', 'ios'
+--   - device: 'android' (la app solo existe para Android, no hay usuarios 'ios')
 --   - registered_at: distintas antiguedades (para registration-period)
 --   - fact_app_usage: >= 6 apps distintas, 2 de ellas con avg_minutes empatado
 --     (para probar desempate alfabetico por app_label en top5)
@@ -16,9 +16,9 @@ TRUNCATE fact_tasks, fact_challenges, fact_app_usage, fact_user_activity, dim_us
 
 INSERT INTO dim_users (user_id, gender, age, country, device, registered_at) VALUES
   ('u1', 'Hombre',    20, 'Argentina', 'android', 1700000000000),
-  ('u2', 'Mujer',     22, 'Argentina', 'ios',     1705000000000),
+  ('u2', 'Mujer',     22, 'Argentina', 'android', 1705000000000),
   ('u3', 'No binario',30, 'Brasil',    'android', 1710000000000),
-  ('u4', 'otro',      40, 'Chile',     'ios',     1715000000000),
+  ('u4', 'otro',      40, 'Chile',     'android', 1715000000000),
   ('u5', NULL,        NULL, NULL,      'android', 1720000000000);
 
 INSERT INTO fact_user_activity (user_id, activity_date) VALUES

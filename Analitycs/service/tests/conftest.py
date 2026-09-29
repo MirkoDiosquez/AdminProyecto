@@ -139,7 +139,7 @@ def mock_repo(monkeypatch):
     )
     monkeypatch.setattr(
         repo, "users_by_device",
-        lambda: [{"device": "android", "count": 3}, {"device": "ios", "count": 2}],
+        lambda: [{"device": "android", "count": 5}],
     )
     monkeypatch.setattr(
         repo, "users_by_registration_period",

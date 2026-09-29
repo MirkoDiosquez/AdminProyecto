@@ -603,3 +603,4 @@ ejecutarse sin pasos manuales adicionales.
   podrá registrarse. Este login de prueba se retira o se reemplaza cuando ese flujo definitivo
   esté disponible, sin que su existencia temporal condicione el diseño final de autenticación del
   proyecto.
+  
